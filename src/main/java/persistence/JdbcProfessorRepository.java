@@ -38,18 +38,31 @@ public record JdbcProfessorRepository(Connection connection) implements Professo
 
     @Override
     public Professor save(Professor professor) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement("insert into professors(professor_id, last_name, first_name) values (?, ?, ?)");
-        ps.setInt(1, professor.getId());
-        ps.setString(2, professor.getLastName());
-        ps.setString(3, professor.getFirstName());
-        ps.executeQuery();
-        return professor;
+        if (professor.getId()!= null) {
+            throw new IllegalArgumentException("Professor already exists");
+        }
+        int key = 0;
+        PreparedStatement ps = connection.prepareStatement("insert into professors(last_name, first_name) values (?, ?)", Statement.RETURN_GENERATED_KEYS);
+
+        ps.setString(1, professor.getLastName());
+        ps.setString(2, professor.getFirstName());
+        ps.executeUpdate();
+
+        ResultSet rs = ps.getGeneratedKeys();
+        if (rs != null && rs.next()) {
+            key = rs.getInt(1);
+        }
+
+        if (ps.executeUpdate() == 0) {
+            throw new SQLException("Creating professor failed, no rows affected.");
+        }
+        return new Professor(key, professor.getLastName(), professor.getFirstName());
     }
 
     @Override
     public void delete(Professor professor) throws SQLException {
         PreparedStatement ps = connection.prepareStatement("DELETE FROM professors WHERE professor_id = ?");
         ps.setInt(1, professor.getId());
-        ps.executeQuery();
+        ps.executeUpdate();
     }
 }

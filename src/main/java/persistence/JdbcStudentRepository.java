@@ -38,27 +38,40 @@ public record JdbcStudentRepository(Connection connection) implements StudentRep
 
     @Override
     public Student save(Student student) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement("insert into students(student_id, last_name, first_name) values (?, ?, ?)");
-        ps.setInt(1, student.getId());
-        ps.setString(2, student.getLastName());
-        ps.setString(3, student.getFirstName());
-        ps.executeQuery();
-        return student;
+        int key = 0;
+        if(student.getId()!=null){
+            throw new IllegalArgumentException("Student already exists");
+        }
+        PreparedStatement ps = connection.prepareStatement("insert into students(last_name, first_name) values (?, ?)", Statement.RETURN_GENERATED_KEYS);
+        ps.setString(1, student.getLastName());
+        ps.setString(2, student.getFirstName());
+        ps.executeUpdate();
+        ResultSet rs = ps.getGeneratedKeys();
+        if (rs != null && rs.next()) {
+            key = rs.getInt(1);
+        }
+        return new Student(key, student.getLastName(), student.getFirstName());
     }
 
     @Override
     public void update(Student student) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement("UPDATE students set (students_id = ?, last_name = ?, first_name = ?)");
-        ps.setInt(1, student.getId());
-        ps.setString(2, student.getLastName());
-        ps.setString(3, student.getFirstName());
-        ps.executeQuery();
+        PreparedStatement ps = connection.prepareStatement("UPDATE students set last_name = ?, first_name = ? WHERE student_id = ?");
+        ps.setString(1, student.getLastName());
+        ps.setString(2, student.getFirstName());
+        ps.setInt(3, student.getId());
+        ps.executeUpdate();
+        if (ps.executeUpdate() == 0) {
+            throw new SQLException("Updating student failed, no rows affected.");
+        }
+        if (ps.executeUpdate() == 0) {
+            throw new SQLException("Student not found");
+        }
     }
 
     @Override
     public void delete(Student student) throws SQLException {
         PreparedStatement ps = connection.prepareStatement("DELETE FROM students WHERE student_id = ?");
         ps.setInt(1, student.getId());
-        ps.executeQuery();
+        ps.executeUpdate();
     }
 }

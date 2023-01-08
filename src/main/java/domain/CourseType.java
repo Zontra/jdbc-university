@@ -1,6 +1,8 @@
 package domain;
 
 
+import java.util.Objects;
+
 public class CourseType {
 
     private final char id;
@@ -19,5 +21,18 @@ public class CourseType {
 
     public String getDescription() {
         return description;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CourseType that = (CourseType) o;
+        return getId() == that.getId();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getId());
     }
 }

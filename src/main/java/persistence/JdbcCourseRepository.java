@@ -12,80 +12,71 @@ public record JdbcCourseRepository(Connection connection) implements CourseRepos
 
     @Override
     public List<Course> findAll() throws SQLException {
-        List<Course> courses = new ArrayList<>();
         Statement statement = connection.createStatement();
-        ResultSet rs = statement.executeQuery("SELECT * FROM courses");
-        while (rs.next()) {
-            int course_id = rs.getInt("course_id");
-            int type_id = rs.getInt("type_id");
-            int professor_id = rs.getInt("professor_id");
-            int description = rs.getInt("description");
-            LocalDate begin_date = rs.getDate("begin_date").toLocalDate();
-            courses.add(new Course(course_id, type_id, professor_id, description, begin_date));
-        }
-        return courses;
+        ResultSet rs = statement.executeQuery("SELECT * FROM courses JOIN professors ON courses.professor_id = professors.professor_id");
+        return getCourseList(rs);
     }
 
     @Override
     public List<Course> findAllByProfessor(Professor professor) throws SQLException {
-        List<Course> courses = new ArrayList<>();
-        Statement statement = connection.createStatement();
-        ResultSet rs = statement.executeQuery("SELECT * FROM courses WHERE professor_id = " + professor.getId());
-        while (rs.next()) {
-            int course_id = rs.getInt("course_id");
-            int type_id = rs.getInt("type_id");
-            int professor_id = rs.getInt("professor_id");
-            int description = rs.getInt("description");
-            LocalDate begin_date = rs.getDate("begin_date").toLocalDate();
-            courses.add(new Course(course_id, type_id, professor_id, description, begin_date));
+        if (professor.getId() == null) {
+            throw new IllegalArgumentException("Professor id cannot be null");
         }
-
-        return courses;
+        Statement statement = connection.createStatement();
+        ResultSet rs = statement.executeQuery("SELECT * FROM courses JOIN professors ON courses.professor_id = professors.professor_id WHERE courses.professor_id = " + professor.getId());
+        return getCourseList(rs);
     }
 
     @Override
     public Optional<Course> findById(int id) throws SQLException {
         Statement statement = connection.createStatement();
-        ResultSet rs = statement.executeQuery("SELECT * from course WHERE course_id =" + id);
+        ResultSet rs = statement.executeQuery("SELECT * from courses JOIN professors ON courses.professor_id = professors.professor_id WHERE course_id =" + id);
         while(rs.next()) {
             int course_id = rs.getInt("course_id");
-            int type_id = rs.getInt("type_id");
+            char type_id = rs.getCharacterStream("type_id").toString().charAt(0);
             int professor_id = rs.getInt("professor_id");
-            int description = rs.getInt("description");
+            String last_name = rs.getString("last_name");
+            String first_name = rs.getString("first_name");
+            String description = rs.getString("description");
             LocalDate begin_date = rs.getDate("begin_date").toLocalDate();
-            return Optional.of(new Course(course_id, type_id, professor_id, description, begin_date));
+
+            CourseType type = new CourseType(type_id, description);
+            Professor professornew = new Professor(professor_id, last_name, first_name);
+            return Optional.of(new Course(course_id, type, professornew, description, begin_date));
         }
         return Optional.empty();
     }
 
     @Override
     public Course save(Course course) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement("insert into course (course_id, type_id, professor_id, description, begin_date) values (?, ?, ?, ?, ?)");
-
-        ps.setInt(1, course.getId());
-        ps.setObject(2, course.getType());
-        ps.setObject(3, course.getProfessor());
-        ps.setObject(4, course.getDescription());
-        ps.setDate(5, Date.valueOf(course.getBegin()));
+        if (course.getId() != null) {
+            throw new IllegalArgumentException("Course id must be null");
+        } else if (LocalDate.now().isAfter(course.getBegin())) {
+            throw new IllegalArgumentException("Course begin date must be in the future");
+        }
+        int key = 0;
+        PreparedStatement ps = connection.prepareStatement("insert into courses (type_id, professor_id, description, begin_date) values (?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+        ps.setString(1, course.getType().getId() + "");
+        ps.setInt(2, course.getProfessor().getId());
+        ps.setString(3, course.getDescription());
+        ps.setDate(4, Date.valueOf(course.getBegin()));
         ps.executeUpdate();
-
-        return course;
+        ResultSet rs = ps.getGeneratedKeys();
+        if (rs != null && rs.next()) {
+            key = rs.getInt(1);
+        }
+        return new Course(key, course.getType(), course.getProfessor(), course.getDescription(), course.getBegin());
     }
 
     @Override
     public List<Course> findAllByStudent(Student student) throws SQLException {
-        List<Course> courses = new ArrayList<>();
-        Statement statement = connection.createStatement();
-        ResultSet rs = statement.executeQuery("SELECT * FROM courses_students WHERE student_id = " + student.getId());
-        while (rs.next()) {
-            int course_id = rs.getInt("course_id");
-            int type_id = rs.getInt("type_id");
-            int professor_id = rs.getInt("professor_id");
-            int description = rs.getInt("description");
-            LocalDate begin_date = rs.getDate("begin_date").toLocalDate();
-            courses.add(new Course(course_id, type_id, professor_id, description, begin_date));
+        if (student.getId() == null) {
+            throw new IllegalArgumentException("Student id is not set");
         }
-        return null;
+        Statement statement = connection.createStatement();
+        ResultSet rs = statement.executeQuery("SELECT * FROM courses_students JOIN courses ON courses.course_id = courses_students.course_id" +
+                " join professors on courses.professor_id = professors.professor_id WHERE student_id = " + student.getId());
+       return getCourseList(rs);
     }
 
     @Override
@@ -101,6 +92,26 @@ public record JdbcCourseRepository(Connection connection) implements CourseRepos
         PreparedStatement ps = connection.prepareStatement("delete from courses_students where course_id = ? and student_id = ?");
         ps.setInt(1, course.getId());
         ps.setInt(2, student.getId());
+        if (ps.executeUpdate() == 0) {
+            throw new IllegalArgumentException("Student is not enrolled in this course");
+        }
         ps.executeUpdate();
+    }
+
+    private List<Course> getCourseList (ResultSet rs) throws SQLException {
+        List<Course> courses = new ArrayList<>();
+        while (rs.next()) {
+            int course_id = rs.getInt("course_id");
+            char type_id = rs.getCharacterStream("type_id").toString().charAt(0);
+            int professor_id = rs.getInt("professor_id");
+            String last_name = rs.getString("last_name");
+            String first_name = rs.getString("first_name");
+            String description = rs.getString("description");
+            LocalDate begin_date = rs.getDate("begin_date").toLocalDate();
+            CourseType type = new CourseType(type_id, description);
+            Professor professornew = new Professor(professor_id, last_name, first_name);
+            courses.add(new Course(course_id, type, professornew, description, begin_date));
+        }
+        return courses;
     }
 }

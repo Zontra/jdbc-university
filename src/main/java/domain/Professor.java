@@ -1,6 +1,8 @@
 package domain;
 
 
+import java.util.Objects;
+
 public class Professor {
 
     private final Integer id;
@@ -8,6 +10,8 @@ public class Professor {
     private String firstName;
 
     public Professor(Integer id, String lastName, String firstName) {
+        if (lastName.isBlank() || firstName.isBlank())
+            throw new IllegalArgumentException();
         this.id = id;
         this.firstName = firstName;
         this.lastName = lastName;
@@ -27,5 +31,18 @@ public class Professor {
 
     public String getFirstName() {
         return firstName;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Professor professor = (Professor) o;
+        return getId().equals(professor.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getId());
     }
 }

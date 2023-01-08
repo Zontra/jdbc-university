@@ -1,6 +1,7 @@
 package domain;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 public class Course {
 
@@ -11,6 +12,8 @@ public class Course {
     private final LocalDate begin;
 
     public Course(Integer id, CourseType type, Professor professor, String description, LocalDate begin) {
+        if (type == null || professor == null || description.isBlank() || begin == null)
+            throw new IllegalArgumentException();
         this.id = id;
         this.type = type;
         this.professor = professor;
@@ -40,5 +43,18 @@ public class Course {
 
     public LocalDate getBegin() {
         return begin;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Course course = (Course) o;
+        return Objects.equals(getId(), course.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getId());
     }
 }
